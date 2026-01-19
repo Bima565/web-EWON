@@ -29,14 +29,21 @@ body {
 }
 
 .sidebar li {
-  padding: 10px;
-  border-radius: 8px;
-  cursor: pointer;
   margin-bottom: 6px;
 }
 
-.sidebar li.active,
-.sidebar li:hover {
+/* NAVLINK */
+.sidebar a {
+  display: block;
+  color: #e5e7eb;
+  text-decoration: none;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sidebar a:hover,
+.sidebar a.active {
   background: #1e293b;
 }
 
@@ -63,7 +70,7 @@ body {
 }
 
 .metric-card {
-  background: linear-gradient(145deg, #020617, #020617);
+  background: #020617;
   border: 1px solid #1e293b;
   border-radius: 14px;
   padding: 16px;

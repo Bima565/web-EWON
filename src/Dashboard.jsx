@@ -90,7 +90,7 @@ export default function Dashboard() {
     };
 
     loadData();
-    const i = setInterval(loadData, 2000);
+    const i = setInterval(loadData, 1000);
     return () => clearInterval(i);
   }, []);
 

@@ -1,7 +1,9 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
+
 import { insertEwonHistory } from "./sql/value-sql.js";
+import { getHistory60Minutes } from "./sql/history-sql.js";
 
 const app = express();
 const PORT = 3000;
@@ -46,7 +48,7 @@ async function getAllTags() {
         throw new Error("Unexpected eWON response format");
     }
 
-    lines.shift(); // remove header
+    lines.shift();
 
     const tagData = {};
     for (const line of lines) {
@@ -64,22 +66,22 @@ async function getAllTags() {
 
 //
 // ==================== AUTO LOGGER ====================
-// Simpan histori setiap 1 menit
+// Simpan histori tiap 1 menit
 //
-const LOG_INTERVAL = 60_000; // 1 menit
+const LOG_INTERVAL = 60_000;
 
 setInterval(async () => {
     try {
         const tags = await getAllTags();
         await insertEwonHistory(tags);
-        console.log(`[LOGGER] eWON logged @ ${new Date().toISOString()}`);
+        console.log(`[LOGGER] Logged @ ${new Date().toISOString()}`);
     } catch (err) {
         console.error("[LOGGER ERROR]", err.message);
     }
 }, LOG_INTERVAL);
 
 //
-// ==================== API MANUAL ====================
+// ==================== API REALTIME ====================
 //
 app.get("/api/ewon", async (req, res) => {
     try {
@@ -94,7 +96,20 @@ app.get("/api/ewon", async (req, res) => {
         });
     } catch (err) {
         console.error("API ERROR:", err.message);
-        res.status(500).json({ error: "EWON ERROR", message: err.message });
+        res.status(500).json({ error: "EWON ERROR" });
+    }
+});
+
+//
+// ==================== API HISTORY (SQL) ====================
+//
+app.get("/api/history", async (req, res) => {
+    try {
+        const history = await getHistory60Minutes();
+        res.json(history);
+    } catch (err) {
+        console.error("HISTORY API ERROR:", err.message);
+        res.status(500).json({ error: "HISTORY ERROR" });
     }
 });
 

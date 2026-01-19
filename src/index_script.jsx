@@ -39,7 +39,7 @@ async function loadData() {
   const res = await fetch("/api/ewon");
   const d = await res.json();
 
-  document.getElementById("v_an").textContent = d.pm139voltAN.toFixed(2) + " V";
+  document.getElementById("v_an").textContent = d.Voltage_AN.toFixed(2) + " V";
   document.getElementById("freq").textContent = "50.03 Hz";
   document.getElementById("amp").textContent = "40 A";
   document.getElementById("kwh").textContent = "0.004 kWh";
@@ -47,7 +47,7 @@ async function loadData() {
 
   const now = new Date().toLocaleTimeString();
   labels.push(now);
-  dataVoltage.push(d.pm139voltAN);
+  dataVoltage.push(d.Voltage_AN);
 
   if (labels.length > 30) {
     labels.shift();

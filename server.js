@@ -3,7 +3,10 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 import { insertEwonHistory } from "./sql/value-sql.js";
-import { getHistory60Minutes } from "./sql/history-sql.js";
+import {
+    getHistory60Minutes,
+    cleanupOldHistory
+} from "./sql/history-sql.js";
 
 const app = express();
 const PORT = 3000;
@@ -66,15 +69,19 @@ async function getAllTags() {
 
 //
 // ==================== AUTO LOGGER ====================
-// Simpan histori tiap 1 menit
+// GANTI 30_000 UNTUK TESTING
 //
-const LOG_INTERVAL = 60_000;
+const LOG_INTERVAL = 30_000; // 30 detik (testing)
 
 setInterval(async () => {
     try {
         const tags = await getAllTags();
         await insertEwonHistory(tags);
-        console.log(`[LOGGER] Logged @ ${new Date().toISOString()}`);
+
+        // 🔥 hapus data lebih dari 60 menit
+        await cleanupOldHistory();
+
+        console.log(`[LOGGER] Logged & cleaned @ ${new Date().toISOString()}`);
     } catch (err) {
         console.error("[LOGGER ERROR]", err.message);
     }
@@ -88,11 +95,11 @@ app.get("/api/ewon", async (req, res) => {
         const allTags = await getAllTags();
 
         res.json({
-            pm139voltAN: allTags.pm139voltAN ?? null,
-            pmtest1: allTags.pmtest1 ?? null,
-            pmtest2: allTags.pmtest2 ?? null,
-            pmtest3: allTags.pmtest3 ?? null,
-            pm139THDVAN: allTags.pm139THDVAN ?? null
+            Voltage_AN: allTags.Voltage_AN ?? null,
+            Frekuensi: allTags.Frekuensi ?? null,
+            Ampere: allTags.Ampere ?? null,
+            Kilowatt_hour: allTags.Kilowatt_hour ?? null,
+            THD_AN: allTags.THD_AN ?? null
         });
     } catch (err) {
         console.error("API ERROR:", err.message);
@@ -101,7 +108,7 @@ app.get("/api/ewon", async (req, res) => {
 });
 
 //
-// ==================== API HISTORY (SQL) ====================
+// ==================== API HISTORY ====================
 //
 app.get("/api/history", async (req, res) => {
     try {
@@ -115,5 +122,5 @@ app.get("/api/history", async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Backend running → http://localhost:${PORT}`);
-    console.log("Auto logger ACTIVE (1 minute interval)");
+    console.log("Auto logger ACTIVE (30 second interval)");
 });

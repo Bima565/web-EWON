@@ -18,11 +18,11 @@ ChartJS.register(
 );
 
 const TAGS = [
-  "pm139voltAN",
-  "pmtest1",
-  "pmtest2",
-  "pmtest3",
-  "pm139THDVAN"
+  "Voltage_AN",
+  "Frekuensi",
+  "Ampere",
+  "Kilowatt_hour",
+  "THD_AN"
 ];
 
 export default function HistoryPower() {

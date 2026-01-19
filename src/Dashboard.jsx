@@ -2,25 +2,25 @@ import { useEffect, useState, useRef } from "react";
 import Chart from "chart.js/auto";
 
 const TAGS = [
-  "pm139voltAN",
-  "pmtest1",
-  "pmtest2",
-  "pmtest3",
-  "pm139THDVAN"
+  "Voltage_AN",
+  "Frekuensi",
+  "Ampere",
+  "Kilowatt_hour",
+  "THD_AN"
 ];
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [activeTag, setActiveTag] = useState("pm139voltAN");
+  const [activeTag, setActiveTag] = useState("Voltage_AN");
 
   const [history, setHistory] = useState({
     labels: [],
-    pm139voltAN: [],
-    pmtest1: [],
-    pmtest2: [],
-    pmtest3: [],
-    pm139THDVAN: []
+    Voltage_AN: [],
+    Frekuensi: [],
+    Ampere: [],
+    Kilowatt_hour: [],
+    THD_AN: []
   });
 
   const chartRef = useRef(null);
@@ -78,11 +78,11 @@ export default function Dashboard() {
 
         setHistory((prev) => ({
           labels: [...prev.labels, time].slice(-30),
-          pm139voltAN: [...prev.pm139voltAN, d.pm139voltAN].slice(-30),
-          pmtest1: [...prev.pmtest1, d.pmtest1].slice(-30),
-          pmtest2: [...prev.pmtest2, d.pmtest2].slice(-30),
-          pmtest3: [...prev.pmtest3, d.pmtest3].slice(-30),
-          pm139THDVAN: [...prev.pm139THDVAN, d.pm139THDVAN].slice(-30),
+          Voltage_AN: [...prev.Voltage_AN, d.Voltage_AN].slice(-30),
+          Frekuensi: [...prev.Frekuensi, d.Frekuensi].slice(-30),
+          Ampere: [...prev.Ampere, d.Ampere].slice(-30),
+          Kilowatt_hour: [...prev.Kilowatt_hour, d.Kilowatt_hour].slice(-30),
+          THD_AN: [...prev.THD_AN, d.THD_AN].slice(-30),
         }));
       } catch (e) {
         setError(e.message);

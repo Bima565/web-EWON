@@ -5,7 +5,7 @@ import pool from "./db-value.js";
  */
 export async function getHistory60Minutes() {
   const [rows] = await pool.query(`
-    SELECT 
+    SELECT
       tag_name,
       tag_value,
       created_at
@@ -15,4 +15,14 @@ export async function getHistory60Minutes() {
   `);
 
   return rows;
+}
+
+/**
+ * Hapus data lebih lama dari 60 menit
+ */
+export async function cleanupOldHistory() {
+  await pool.query(`
+    DELETE FROM ewon_history
+    WHERE created_at < NOW() - INTERVAL 60 MINUTE
+  `);
 }

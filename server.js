@@ -4,8 +4,9 @@ import cors from "cors";
 
 import { insertEwonHistory } from "./sql/value-sql.js";
 import {
-    getHistory60Minutes,
-    cleanupOldHistory
+  getLatestTags,
+  getHistoryMinutes,
+  cleanupOldData
 } from "./sql/history-sql.js";
 
 const app = express();
@@ -13,114 +14,132 @@ const PORT = 3000;
 
 app.use(cors());
 
-// ===== SESUAIKAN =====
+/* ================= KONFIG eWON ================= */
 const EWON_IP = "192.168.100.239";
 const USER = "admin";
 const PASS = "Admin123";
-// =====================
+/* ============================================== */
 
+/* =================================================
+   FETCH DATA DARI eWON
+================================================= */
 async function getAllTags() {
-    const url =
-        `http://${EWON_IP}/rcgi.bin/ParamForm` +
-        `?AST_Param=$dtIV$ftT`;
+  const url =
+    `http://${EWON_IP}/rcgi.bin/ParamForm?AST_Param=$dtIV$ftT`;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    let response;
-    try {
-        response = await fetch(url, {
-            headers: {
-                Authorization:
-                    "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64")
-            },
-            signal: controller.signal
-        });
-    } finally {
-        clearTimeout(timeoutId);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization:
+          "Basic " +
+          Buffer.from(`${USER}:${PASS}`).toString("base64")
+      },
+      signal: controller.signal
+    });
+
+    if (!res.ok) {
+      throw new Error(`eWON HTTP ${res.status}`);
     }
 
-    if (!response.ok) {
-        throw new Error(`eWON request failed ${response.status}`);
-    }
+    const text = await res.text();
+    return parseEwonResponse(text);
 
-    const text = await response.text();
-    const lines = text.trim().split(/\r?\n/);
-
-    if (!lines[0]?.includes('"TagId";"TagName";"Value"')) {
-        throw new Error("Unexpected eWON response format");
-    }
-
-    lines.shift();
-
-    const tagData = {};
-    for (const line of lines) {
-        const parts = line.split(";");
-        if (parts.length >= 3) {
-            const tagName = parts[1].replace(/"/g, "");
-            const value = parseFloat(parts[2]);
-            if (!isNaN(value)) {
-                tagData[tagName] = value;
-            }
-        }
-    }
-    return tagData;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
-//
-// ==================== AUTO LOGGER ====================
-// GANTI 30_000 UNTUK TESTING
-//
-const LOG_INTERVAL = 30_000; // 30 detik (testing)
+/* =================================================
+   PARSER RESPONSE eWON
+================================================= */
+function parseEwonResponse(text) {
+  const lines = text.trim().split(/\r?\n/);
+
+  // header
+  lines.shift();
+
+  const data = {};
+  for (const line of lines) {
+    const parts = line.split(";");
+    if (parts.length < 3) continue;
+
+    const tag = parts[1].replace(/"/g, "");
+    const value = parseFloat(parts[2]);
+
+    if (!isNaN(value)) {
+      data[tag] = value;
+    }
+  }
+  return data;
+}
+
+/* =================================================
+   AUTO LOGGER → INSERT KE SQL
+================================================= */
+const LOG_INTERVAL = 30_000; // ⏱ 30 detik
 
 setInterval(async () => {
-    try {
-        const tags = await getAllTags();
-        await insertEwonHistory(tags);
+  try {
+    const tags = await getAllTags();
+    await insertEwonHistory(tags);
 
-        // 🔥 hapus data lebih dari 60 menit
-        await cleanupOldHistory();
+    // hapus data lebih dari 60 menit
+    await cleanupOldData(3600);
 
-        console.log(`[LOGGER] Logged & cleaned @ ${new Date().toISOString()}`);
-    } catch (err) {
-        console.error("[LOGGER ERROR]", err.message);
-    }
+    console.log("[LOGGER] OK", new Date().toLocaleTimeString());
+  } catch (err) {
+    console.error("[LOGGER ERROR]", err.message);
+  }
 }, LOG_INTERVAL);
 
-//
-// ==================== API REALTIME ====================
-//
+/* =================================================
+   API REALTIME (LANGSUNG EWON)
+================================================= */
 app.get("/api/ewon", async (req, res) => {
-    try {
-        const allTags = await getAllTags();
-
-        res.json({
-            Voltage_AN: allTags.Voltage_AN ?? null,
-            Frekuensi: allTags.Frekuensi ?? null,
-            Ampere: allTags.Ampere ?? null,
-            Kilowatt_hour: allTags.Kilowatt_hour ?? null,
-            THD_AN: allTags.THD_AN ?? null
-        });
-    } catch (err) {
-        console.error("API ERROR:", err.message);
-        res.status(500).json({ error: "EWON ERROR" });
-    }
+  try {
+    const t = await getAllTags();
+    res.json({
+      Voltage_AN: t.Voltage_AN ?? null,
+      Frekuensi: t.Frekuensi ?? null,
+      Ampere: t.Ampere ?? null,
+      Kilowatt_hour: t.Kilowatt_hour ?? null,
+      THD_AN: t.THD_AN ?? null
+    });
+  } catch {
+    res.status(500).json({ error: "EWON ERROR" });
+  }
 });
 
-//
-// ==================== API HISTORY ====================
-//
-app.get("/api/history", async (req, res) => {
-    try {
-        const history = await getHistory60Minutes();
-        res.json(history);
-    } catch (err) {
-        console.error("HISTORY API ERROR:", err.message);
-        res.status(500).json({ error: "HISTORY ERROR" });
-    }
+/* =================================================
+   API DASHBOARD (DATA TERAKHIR SQL)
+================================================= */
+app.get("/api/history/latest", async (req, res) => {
+  try {
+    const rows = await getLatestTags();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+/* =================================================
+   API HISTORY X MENIT
+================================================= */
+app.get("/api/history/:minutes", async (req, res) => {
+  try {
+    const minutes = Number(req.params.minutes) || 60;
+    const rows = await getHistoryMinutes(minutes);
+    res.json(rows);
+  } catch {
+    res.status(500).json({ error: "HISTORY ERROR" });
+  }
+});
+
+/* ================================================= */
 app.listen(PORT, () => {
-    console.log(`Backend running → http://localhost:${PORT}`);
-    console.log("Auto logger ACTIVE (30 second interval)");
+  console.log(`✅ Backend running → http://localhost:${PORT}`);
+  console.log("⏱ Auto logger aktif (30 detik)");
 });

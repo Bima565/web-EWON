@@ -28,6 +28,7 @@ const TAGS = [
 export default function HistoryPower() {
   const [history, setHistory] = useState([]);
 
+  // ================= FETCH HISTORY =================
   const loadHistory = async () => {
     try {
       const res = await fetch("/api/history");
@@ -40,43 +41,74 @@ export default function HistoryPower() {
 
   useEffect(() => {
     loadHistory();
-    const i = setInterval(loadHistory, 30000); // update 30 detik
+    const i = setInterval(loadHistory, 1000); // ⏱ 30 detik
     return () => clearInterval(i);
   }, []);
 
-  const labels = [
-    ...new Set(
-      history.map(h =>
-        new Date(h.created_at).toLocaleTimeString()
-      )
-    )
-  ];
-
-  const datasets = TAGS.map(tag => ({
-    label: tag,
-    data: labels.map((_, idx) => {
-      const row = history.filter(h => h.tag_name === tag)[idx];
-      return row ? row.tag_value : null;
-    })
-  }));
+  // ================= GROUP DATA PER TAG =================
+  const grouped = TAGS.reduce((acc, tag) => {
+    acc[tag] = history
+      .filter(h => h.tag_name === tag)
+      .map(h => ({
+        time: new Date(h.created_at).toLocaleTimeString(),
+        value: h.tag_value
+      }));
+    return acc;
+  }, {});
 
   return (
     <>
       <header className="topbar">
-        <h1>Power History</h1>
-        <small>Data dari database (update 30 detik)</small>
+        <h1>Power History (60 Menit)</h1>
+        <small>Update tiap 30 detik</small>
       </header>
 
-      <section className="charts">
-        <div className="chart-box" style={{ height: 350 }}>
-          <Bar
-            data={{ labels, datasets }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false
-            }}
-          />
-        </div>
+      {/* ================= GRID CHART ================= */}
+      <section
+        className="charts"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gap: 16
+        }}
+      >
+        {TAGS.map(tag => {
+          const rows = grouped[tag] || [];
+
+          const chartData = {
+            labels: rows.map(r => r.time),
+            datasets: [
+              {
+                label: tag,
+                data: rows.map(r => r.value),
+                backgroundColor: "#38bdf8"
+              }
+            ]
+          };
+
+          return (
+            <div
+              key={tag}
+              className="chart-box"
+              style={{ height: 300 }}
+            >
+              <h4 style={{ marginBottom: 8 }}>{tag}</h4>
+              <Bar
+                data={chartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  animation: false,
+                  scales: {
+                    y: {
+                      ticks: { precision: 2 }
+                    }
+                  }
+                }}
+              />
+            </div>
+          );
+        })}
       </section>
     </>
   );

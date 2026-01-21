@@ -1,0 +1,14 @@
+{
+  "influx": {
+    "url": "http://localhost:8086",
+    "token": "Pl7bO5PfBWT9UwmIOOrkKyDbcbqS27ejI0UoTPF_VVgp0pWp25Hg2LJsAVSWbJ6_e6_AIPpo8ZJvd1uqvwJbtw==",
+    "org": "SBI",
+    "bucket": "SBI"
+  },
+  "ewon": {
+    "ip": "192.168.100.239",
+    "user": "admin",
+    "pass": "Admin123"
+  },
+  "interval_seconds": 1
+}

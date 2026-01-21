@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 
 const TAGS = [
@@ -9,133 +9,160 @@ const TAGS = [
   "THD_AN"
 ];
 
+const STORAGE_KEY = "dashboard_state_v1";
+
 export default function Dashboard() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-  const [activeTag, setActiveTag] = useState("Voltage_AN");
-
-  const [history, setHistory] = useState({
-    labels: [],
-    Voltage_AN: [],
-    Frekuensi: [],
-    Ampere: [],
-    Kilowatt_hour: [],
-    THD_AN: []
-  });
-
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
-  // ===================== INIT CHART =====================
-  useEffect(() => {
-    const ctx = chartRef.current.getContext("2d");
+  // ================= LOAD STATE DARI STORAGE =================
+  const loadInitialState = () => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return null;
+    }
+  };
 
-    chartInstanceRef.current = new Chart(ctx, {
+  const savedState = loadInitialState();
+
+  const [activeTag, setActiveTag] = useState(
+    savedState?.activeTag || "Voltage_AN"
+  );
+
+  const [latest, setLatest] = useState(
+    savedState?.latest || {}
+  );
+
+  const [history, setHistory] = useState(
+    savedState?.history || {
+      labels: [],
+      Voltage_AN: [],
+      Frekuensi: [],
+      Ampere: [],
+      Kilowatt_hour: [],
+      THD_AN: []
+    }
+  );
+
+  // ================= SIMPAN KE STORAGE =================
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ activeTag, latest, history })
+    );
+  }, [activeTag, latest, history]);
+
+  // ================= INIT CHART =================
+  useEffect(() => {
+    chartInstanceRef.current = new Chart(chartRef.current, {
       type: "line",
       data: {
-        labels: [],
+        labels: history.labels,
         datasets: [
           {
             label: activeTag,
-            data: [],
-            tension: 0.4,
+            data: history[activeTag],
             borderWidth: 2,
+            tension: 0, // 🔥 tajam lancip
             pointRadius: 0,
             segment: {
-              borderColor: (ctx) =>
-                ctx.p0.parsed.y > ctx.p1.parsed.y
-                  ? "#ef4444" // turun
-                  : "#22c55e", // naik
-            },
-          },
-        ],
+              borderColor: ctx =>
+                ctx.p1.parsed.y > ctx.p0.parsed.y
+                  ? "#22c55e"
+                  : "#ef4444"
+            }
+          }
+        ]
       },
       options: {
         responsive: true,
+        animation: { duration: 300 },
         maintainAspectRatio: false,
-        animation: false,
         scales: {
-          y: {
-            ticks: { precision: 2 },
-          },
-        },
-      },
+          y: { ticks: { precision: 2 } }
+        }
+      }
     });
 
     return () => chartInstanceRef.current.destroy();
   }, []);
 
-  // ===================== FETCH DATA =====================
+  // ================= FETCH TERAKHIR (2 DETIK) =================
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const res = await fetch("/api/ewon");
-        if (!res.ok) throw new Error("Fetch failed");
-        const d = await res.json();
-        setData(d);
+    const loadLatest = async () => {
+      const res = await fetch("/api/history/latest");
+      const rows = await res.json();
 
-        const time = new Date().toLocaleTimeString();
+      const now = new Date().toLocaleTimeString();
+      const values = {};
 
-        setHistory((prev) => ({
-          labels: [...prev.labels, time].slice(-30),
-          Voltage_AN: [...prev.Voltage_AN, d.Voltage_AN].slice(-30),
-          Frekuensi: [...prev.Frekuensi, d.Frekuensi].slice(-30),
-          Ampere: [...prev.Ampere, d.Ampere].slice(-30),
-          Kilowatt_hour: [...prev.Kilowatt_hour, d.Kilowatt_hour].slice(-30),
-          THD_AN: [...prev.THD_AN, d.THD_AN].slice(-30),
-        }));
-      } catch (e) {
-        setError(e.message);
-      }
+      rows.forEach(r => {
+        values[r.tag_name] = r.tag_value;
+      });
+
+      setLatest(values);
+
+      setHistory(prev => ({
+        labels: [...prev.labels, now].slice(-30),
+        Voltage_AN: [...prev.Voltage_AN, values.Voltage_AN].slice(-30),
+        Frekuensi: [...prev.Frekuensi, values.Frekuensi].slice(-30),
+        Ampere: [...prev.Ampere, values.Ampere].slice(-30),
+        Kilowatt_hour: [...prev.Kilowatt_hour, values.Kilowatt_hour].slice(-30),
+        THD_AN: [...prev.THD_AN, values.THD_AN].slice(-30)
+      }));
     };
 
-    loadData();
-    const i = setInterval(loadData, 1000);
+    loadLatest();
+    const i = setInterval(loadLatest, 2000);
     return () => clearInterval(i);
   }, []);
 
-  // ===================== UPDATE CHART =====================
+  // ================= UPDATE CHART =================
   useEffect(() => {
     if (!chartInstanceRef.current) return;
 
     chartInstanceRef.current.data.labels = history.labels;
     chartInstanceRef.current.data.datasets[0].label = activeTag;
     chartInstanceRef.current.data.datasets[0].data = history[activeTag];
-    chartInstanceRef.current.update();
+    chartInstanceRef.current.update("none");
   }, [history, activeTag]);
-
-  if (error) return <div>Error: {error}</div>;
 
   return (
     <>
       <header className="topbar">
-        <h1>Magang PNM Energy Monitoring System</h1>
+        <h1>PNM Energy Monitoring</h1>
+        <small>SQL Live Data (2 detik)</small>
       </header>
 
-      {/* ================= METRICS ================= */}
+      {/* METRICS */}
       <section className="metrics">
-        {TAGS.map((tag) => (
+        {TAGS.map(tag => (
           <div
             key={tag}
             className="metric-card"
+            onClick={() => setActiveTag(tag)}
             style={{
               cursor: "pointer",
               border:
                 activeTag === tag
                   ? "2px solid #38bdf8"
-                  : "1px solid #334155",
+                  : "1px solid #334155"
             }}
-            onClick={() => setActiveTag(tag)}
           >
             <h4>{tag}</h4>
             <div className="value">
-              {data && data[tag] !== null ? data[tag].toFixed(2) : "--"}
+              {latest[tag] !== undefined
+                ? Number(latest[tag]).toFixed(2)
+                : "--"}
             </div>
           </div>
         ))}
       </section>
 
-      {/* ================= CHART ================= */}
+      {/* CHART */}
       <section className="charts">
         <div className="chart-box" style={{ height: 360 }}>
           <canvas ref={chartRef}></canvas>
